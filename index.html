@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SYSTEM WINDOW V2</title>
+  <style>
+    :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
+    body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
+    h1, h2 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(157,78,221,0.5); margin-bottom: 10px; }
+    .box { background: var(--card); border: 1px solid var(--accent); padding: 15px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(157,78,221,0.1); }
+    .flex-row { display: flex; gap: 15px; align-items: center; }
+    .avatar-box { width: 90px; height: 110px; border: 1px solid var(--accent); background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 11px; color: var(--accent); }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; flex-grow: 1; }
+    button { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 3px 8px; cursor: pointer; font-family: monospace; font-size: 11px; margin-left: 5px; }
+    button:hover { background: var(--accent); color: #000; }
+    input[type="text"] { background: #000; border: 1px solid var(--border); color: #fff; padding: 5px; font-family: monospace; width: 60%; }
+    ul { list-style: none; padding-left: 15px; border-left: 1px dashed var(--border); margin: 5px 0; }
+    li { margin: 8px 0; }
+    .completed { text-decoration: line-through; opacity: 0.5; }
+    .task-item { cursor: pointer; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>[ SYSTEM WINDOW ]</h1>
+
+  <div class="box">
+    <h2>HUNTER STATUS</h2>
+    <div class="flex-row">
+      <!-- To use real anime images, replace the div below with: <img id="jinwoo-img" src="lvl1.jpg" width="90"> -->
+      <div id="avatar" class="avatar-box"></div>
+      <div style="flex-grow: 1;">
+        <div>LEVEL: <span id="lvl">1</span> | XP: <span id="xp">0</span>/100</div>
+        <div class="stat-grid">
+          <div>STR: <span id="str">10</span></div>
+          <div>INT: <span id="int">10</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>DAILY QUESTS (RESETS DAILY)</h2>
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="new-daily" placeholder="Enter new daily quest...">
+      <button onclick="addDaily()">+ ADD</button>
+    </div>
+    <div id="daily-tree"></div>
+  </div>
+
+  <div class="box">
+    <h2>QUEST LOG (CLEARS ON FINISH)</h2>
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="new-task" placeholder="Enter one-time quest...">
+      <button onclick="addTask()">+ ADD</button>
+    </div>
+    <div id="todo-tree"></div>
+  </div>
+
+  <script>
+    let state = JSON.parse(localStorage.getItem('system_state_v2')) || {
+      lvl: 1, xp: 0, str: 10, int: 10,
+      lastDate: new Date().toDateString(),
+      dailies: [
+        { id: 1, text: "Physical Training (STR +1)", done: false, type: 'str', children: [] },
+        { id: 2, text: "Mental Focus (INT +1)", done: false, type: 'int', children: [] }
+      ],
+      todos: []
+    };
+
+    const today = new Date().toDateString();
+    if (state.lastDate !== today) {
+      const resetTree = (list) => {
+        list.forEach(item => {
+          item.done = false;
+          if (item.children) resetTree(item.children);
+        });
+      };
+      resetTree(state.dailies);
+
+      const filterCompleted = (list) => {
+        return list.filter(item => !item.done).map(item => {
+          if (item.children) item.children = filterCompleted(item.children);
+          return item;
+        });
+      };
+      state.todos = filterCompleted(state.todos);
+      
+      state.lastDate = today;
+      save();
+    }
+
+    function save() { localStorage.setItem('system_state_v2', JSON.stringify(state)); render(); }
+
+    function addXp(amount) {
+      state.xp += amount;
+      if (state.xp >= 100) {
+        state.lvl += 1;
+        state.xp -= 100;
+        state.str += 2;
+        state.int += 2;
+        alert("[ SYSTEM NOTICE ]: LEVEL UP! ALL STATS INCREASED");
+      }
+    }
+
+    function addNode(targetArray, inputId) {
+      const val = document.getElementById(inputId).value.trim();
+      if (!val) return;
+      targetArray.push({ id: Date.now(), text: val, done: false, children: [] });
+      document.getElementById(inputId).value = '';
+      save();
+    }
+    function addDaily() { addNode(state.dailies, 'new-daily'); }
+    function addTask() { addNode(state.todos, 'new-task'); }
+
+    function addSubtask(parentId, targetArray) {
+      const text = prompt("Enter subtopic name:");
+      if (!text) return;
+      const findAndAdd = (list) => {
+        for (let node of list) {
+          if (node.id === parentId) {
+            node.children.push({ id: Date.now(), text: text, done: false, children: [] });
+            return true;
+          }
+          if (node.children && findAndAdd(node.children)) return true;
+        }
+      };
+      findAndAdd(targetArray);
+      save();
+    }
+
+    function toggleNode(id, targetArray, isDaily) {
+      const findAndToggle = (list) => {
+        for (let node of list) {
+          if (node.id === id) {
+            node.done = !node.done;
+            if (node.done) {
+              addXp(isDaily ? 30 : 15);
+              if (isDaily && node.type === 'str') state.str += 1;
+              if (isDaily && node.type === 'int') state.int += 1;
+            } else {
+              if (isDaily && node.type === 'str') state.str -= 1;
+              if (isDaily && node.type === 'int') state.int -= 1;
+            }
+            return true;
+          }
+          if (node.children && findAndToggle(node.children)) return true;
+        }
+      };
+      findAndToggle(targetArray);
+      save();
+    }
+
+    function renderTree(list, isDaily) {
+      if (!list || !list.length) return '';
+      const arrayName = isDaily ? 'state.dailies' : 'state.todos';
+      return '<ul>' + list.map(item => `
+        <li>
+          <span class="task-item ${item.done ? 'completed' : ''}" onclick="toggleNode(${item.id}, ${arrayName}, ${isDaily})">
+            [${item.done ? '✓' : ' '}] ${item.text}
+          </span>
+          <button onclick="addSubtask(${item.id}, ${arrayName})">+ sub</button>
+          ${renderTree(item.children, isDaily)}
+        </li>
+      `).join('') + '</ul>';
+    }
+
+    function updateAvatar() {
+      const avatar = document.getElementById('avatar');
+      if (state.lvl < 10) {
+        avatar.innerHTML = "E-RANK<br>Weakest<br>Hunter";
+      } else if (state.lvl < 30) {
+        avatar.innerHTML = "C-RANK<br>Necromancer";
+      } else if (state.lvl < 50) {
+        avatar.innerHTML = "A-RANK<br>Shadow<br>Lord";
+      } else {
+        avatar.innerHTML = "S-RANK<br>Monarch";
+        avatar.style.borderColor = "#ff0000";
+        avatar.style.color = "#ff0000";
+        avatar.style.boxShadow = "0 0 10px red";
+      }
+    }
+
+    function render() {
+      document.getElementById('lvl').innerText = state.lvl;
+      document.getElementById('xp').innerText = state.xp;
+      document.getElementById('str').innerText = state.str;
+      document.getElementById('int').innerText = state.int;
+      updateAvatar();
+      
+      document.getElementById('daily-tree').innerHTML = renderTree(state.dailies, true);
+      document.getElementById('todo-tree').innerHTML = renderTree(state.todos, false);
+    }
+
+    render();
+  </script>
+</body>
+</html>
