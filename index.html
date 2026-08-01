@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V6</title>
+  <title>SYSTEM WINDOW V7</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -66,6 +66,13 @@
     <div id="timeline"></div>
   </div>
 
+  <div class="box">
+    <h2>SYSTEM DATA</h2>
+    <button onclick="exportData()">[ EXPORT SAVE FILE ]</button>
+    <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
+    <button onclick="document.getElementById('import-file').click()">[ IMPORT SAVE FILE ]</button>
+  </div>
+
   <script>
     let state = JSON.parse(localStorage.getItem('system_state_v6')) || {
       lvl: 1, xp: 0, str: 10, int: 10,
@@ -112,6 +119,53 @@
     checkDailyReset(); 
 
     function save() { localStorage.setItem('system_state_v6', JSON.stringify(state)); render(); }
+
+    function exportData() {
+      const dataStr = JSON.stringify(state, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `system_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          
+          state.lvl = imported.lvl || 1;
+          state.xp = imported.xp || 0;
+          state.str = imported.str || 10;
+          state.int = imported.int || 10;
+          state.lastDate = imported.lastDate || null;
+
+          const migrateNodes = (list) => {
+            if (!list) return [];
+            return list.map(node => ({
+              ...node,
+              time: node.time || "",
+              children: migrateNodes(node.children || [])
+            }));
+          };
+
+          state.dailies = migrateNodes(imported.dailies || []);
+          state.todos = migrateNodes(imported.todos || []);
+
+          save();
+          alert("[ SYSTEM NOTICE ]: DATA RESTORED SUCCESSFULLY");
+        } catch (error) {
+          alert("[ SYSTEM ERROR ]: CORRUPTED SAVE FILE");
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
 
     function addXp(amount) {
       state.xp += amount;
