@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V7</title>
+  <title>SYSTEM WINDOW V9</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
-    h1, h2 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(157,78,221,0.5); margin-bottom: 10px; }
+    h1, h2 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(157,78,221,0.5); }
+    h2 { margin-bottom: 0; }
     .box { background: var(--card); border: 1px solid var(--accent); padding: 15px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(157,78,221,0.1); }
+    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .flex-row { display: flex; gap: 15px; align-items: center; }
-    .avatar-box { width: 90px; height: 110px; border: 1px solid var(--accent); background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 11px; color: var(--accent); }
+    .avatar-box { width: 90px; height: 110px; border: 1px solid var(--accent); background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 11px; color: var(--accent); cursor: pointer; overflow: hidden; position: relative; }
+    .avatar-box:hover::after { content: "+ UPLOAD"; position: absolute; background: rgba(0,0,0,0.7); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; left: 0; top: 0; }
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; flex-grow: 1; }
     button { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 3px 8px; cursor: pointer; font-family: monospace; font-size: 11px; margin-left: 2px; }
     button:hover { background: var(--accent); color: #000; }
@@ -30,9 +33,17 @@
   <h1>[ SYSTEM WINDOW ]</h1>
 
   <div class="box">
-    <h2>HUNTER STATUS</h2>
+    <div class="header-row">
+      <h2>HUNTER STATUS</h2>
+      <div>
+        <button onclick="exportData()">[ SAVE ]</button>
+        <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
+        <button onclick="document.getElementById('import-file').click()">[ LOAD ]</button>
+      </div>
+    </div>
     <div class="flex-row">
-      <div id="avatar" class="avatar-box"></div>
+      <input type="file" id="avatar-upload" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
+      <div id="avatar" class="avatar-box" onclick="document.getElementById('avatar-upload').click()"></div>
       <div style="flex-grow: 1;">
         <div>LEVEL: <span id="lvl">1</span> | XP: <span id="xp">0</span>/100</div>
         <div class="stat-grid">
@@ -44,7 +55,9 @@
   </div>
 
   <div class="box">
-    <h2>DAILY QUESTS (RESETS 6AM)</h2>
+    <div class="header-row">
+      <h2>DAILY QUESTS (RESETS 6AM)</h2>
+    </div>
     <div style="margin-bottom: 10px;">
       <input type="text" id="new-daily" placeholder="Enter new daily quest...">
       <button onclick="addDaily()">+ ADD</button>
@@ -53,7 +66,9 @@
   </div>
 
   <div class="box">
-    <h2>QUEST LOG (CLEARS COMPLETED AT 6AM)</h2>
+    <div class="header-row">
+      <h2>QUEST LOG (CLEARS AT 6AM)</h2>
+    </div>
     <div style="margin-bottom: 10px;">
       <input type="text" id="new-task" placeholder="Enter one-time quest...">
       <button onclick="addTask()">+ ADD</button>
@@ -62,21 +77,17 @@
   </div>
 
   <div class="box">
-    <h2>DAILY SCHEDULE</h2>
+    <div class="header-row">
+      <h2>DAILY SCHEDULE</h2>
+    </div>
     <div id="timeline"></div>
   </div>
 
-  <div class="box">
-    <h2>SYSTEM DATA</h2>
-    <button onclick="exportData()">[ EXPORT SAVE FILE ]</button>
-    <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
-    <button onclick="document.getElementById('import-file').click()">[ IMPORT SAVE FILE ]</button>
-  </div>
-
   <script>
-    let state = JSON.parse(localStorage.getItem('system_state_v6')) || {
+    let state = JSON.parse(localStorage.getItem('system_state_v9')) || {
       lvl: 1, xp: 0, str: 10, int: 10,
       lastDate: null,
+      avatarImage: null,
       dailies: [
         { id: 1, text: "Physical Training (STR +1)", done: false, type: 'str', time: "", children: [] },
         { id: 2, text: "Mental Focus (INT +1)", done: false, type: 'int', time: "", children: [] }
@@ -118,7 +129,34 @@
     setInterval(checkDailyReset, 60000); 
     checkDailyReset(); 
 
-    function save() { localStorage.setItem('system_state_v6', JSON.stringify(state)); render(); }
+    function save() { localStorage.setItem('system_state_v9', JSON.stringify(state)); render(); }
+
+    function handleAvatarUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 90;
+          const MAX_HEIGHT = 110;
+          canvas.width = MAX_WIDTH;
+          canvas.height = MAX_HEIGHT;
+          const ctx = canvas.getContext('2d');
+          
+          ctx.drawImage(img, 0, 0, MAX_WIDTH, MAX_HEIGHT);
+          
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          state.avatarImage = dataUrl;
+          save();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = ''; 
+    }
 
     function exportData() {
       const dataStr = JSON.stringify(state, null, 2);
@@ -144,6 +182,7 @@
           state.str = imported.str || 10;
           state.int = imported.int || 10;
           state.lastDate = imported.lastDate || null;
+          state.avatarImage = imported.avatarImage || null;
 
           const migrateNodes = (list) => {
             if (!list) return [];
@@ -322,6 +361,12 @@
 
     function updateAvatar() {
       const avatar = document.getElementById('avatar');
+      
+      if (state.avatarImage) {
+        avatar.innerHTML = `<img src="${state.avatarImage}" style="width:100%; height:100%; object-fit:cover;">`;
+        return;
+      }
+
       if (state.lvl < 10) {
         avatar.innerHTML = "E-RANK<br>Weakest<br>Hunter";
       } else if (state.lvl < 30) {
