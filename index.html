@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.1 (CLOUD)</title>
+  <title>SYSTEM WINDOW V11.2 (CLOUD + SPLIT SYNC)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -34,7 +34,6 @@
     .timeline-item { padding: 5px 0 5px 10px; border-left: 2px solid var(--accent); margin-bottom: 5px; }
     .time-badge { color: var(--accent); font-weight: bold; margin-right: 10px; display: inline-block; width: 50px; }
     
-    /* Login Screen Styles */
     #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
     #app-container { display: none; }
     .login-box { border: 1px solid var(--accent); padding: 40px; text-align: center; box-shadow: 0 0 20px rgba(157,78,221,0.2); background: var(--card); }
@@ -51,7 +50,7 @@
     </div>
   </div>
 
-  <!-- MAIN APP (HIDDEN UNTIL LOGIN) -->
+  <!-- MAIN APP -->
   <div id="app-container">
     <h1>[ SYSTEM WINDOW ]</h1>
 
@@ -60,7 +59,8 @@
         <h2>HUNTER STATUS</h2>
         <div>
           <span id="user-email" style="font-size: 10px; opacity: 0.5; margin-right: 10px;"></span>
-          <button id="save-btn" onclick="saveToCloud()">[ SYNC CLOUD ]</button>
+          <button id="load-btn" onclick="loadFromCloud()">[ LOAD ]</button>
+          <button id="save-btn" onclick="saveToCloud()">[ SAVE ]</button>
           <button id="logout-btn">[ LOGOUT ]</button>
         </div>
       </div>
@@ -107,7 +107,6 @@
     </div>
   </div>
 
-  <!-- FIREBASE MODULE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
@@ -130,8 +129,7 @@
 
     let currentUser = null;
 
-    // Default State Template
-    window.state = {
+    const defaultState = {
       lvl: 1, xp: 0, str: 10, int: 10,
       lastDate: null,
       avatarImage: null,
@@ -142,7 +140,8 @@
       todos: []
     };
 
-    // Authentication Logic
+    window.state = { ...defaultState };
+
     document.getElementById('login-btn').addEventListener('click', () => {
       signInWithPopup(auth, provider).catch(err => alert("Login Failed: " + err.message));
     });
@@ -161,18 +160,14 @@
         document.getElementById('app-container').style.display = 'block';
         document.getElementById('user-email').innerText = user.email;
         
-        // Load data from Cloud
         const docRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          window.state = docSnap.data();
+          window.state = { ...defaultState, ...docSnap.data() }; 
         } else {
-          // Check if V10 local backup exists, migrate it to cloud
           const localV10 = localStorage.getItem('system_state_v10');
-          if (localV10) {
-             window.state = JSON.parse(localV10);
-          }
+          if (localV10) window.state = { ...defaultState, ...JSON.parse(localV10) };
           await setDoc(docRef, window.state);
         }
         
@@ -183,14 +178,35 @@
       }
     });
 
-    // Core Cloud Save Function
+    window.loadFromCloud = async function() {
+      if (!currentUser) return;
+      const loadBtn = document.getElementById('load-btn');
+      loadBtn.innerText = "[ LOADING... ]";
+      try {
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          window.state = { ...defaultState, ...docSnap.data() };
+          checkDailyReset();
+          render();
+          loadBtn.innerText = "[ SUCCESS ]";
+        } else {
+          loadBtn.innerText = "[ NO DATA ]";
+        }
+      } catch (e) {
+        alert("Error loading from cloud!");
+        loadBtn.innerText = "[ ERROR ]";
+      }
+      setTimeout(() => loadBtn.innerText = "[ LOAD ]", 1500);
+    };
+
     window.saveToCloud = async function() {
       if (!currentUser) return;
       const saveBtn = document.getElementById('save-btn');
       saveBtn.innerText = "[ SAVING... ]";
       try {
         await setDoc(doc(db, "users", currentUser.uid), window.state);
-        setTimeout(() => saveBtn.innerText = "[ SYNC CLOUD ]", 1000);
+        setTimeout(() => saveBtn.innerText = "[ SAVE ]", 1000);
         render();
       } catch (e) {
         alert("Error saving to cloud!");
@@ -198,14 +214,9 @@
       }
     };
 
-    // Modified Auto-Save (Wraps the manual save)
     window.save = function() {
       window.saveToCloud();
     };
-
-    // ==========================================
-    // ALL V10 LOGIC (Bound to window for access)
-    // ==========================================
 
     window.checkDailyReset = function() {
       const now = new Date();
