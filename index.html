@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.4 (HABITS INTEGRATED)</title>
+  <title>SYSTEM WINDOW V11.4.1 (LAYOUT PATCH)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -102,17 +102,6 @@
 
     <div class="box">
       <div class="header-row">
-        <h2>MONTHLY SCHEDULE (RECURRING)</h2>
-      </div>
-      <div style="margin-bottom: 10px;">
-        <input type="text" id="new-monthly" placeholder="Enter monthly quest...">
-        <button onclick="addMonthly()">+ ADD</button>
-      </div>
-      <div id="monthly-tree"></div>
-    </div>
-
-    <div class="box">
-      <div class="header-row">
         <h2>QUEST LOG (CLEARS AT 6AM)</h2>
       </div>
       <div style="margin-bottom: 10px;">
@@ -127,6 +116,17 @@
         <h2>DAILY SCHEDULE</h2>
       </div>
       <div id="timeline"></div>
+    </div>
+
+    <div class="box">
+      <div class="header-row">
+        <h2>MONTHLY SCHEDULE (RECURRING)</h2>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <input type="text" id="new-monthly" placeholder="Enter monthly quest...">
+        <button onclick="addMonthly()">+ ADD</button>
+      </div>
+      <div id="monthly-tree"></div>
     </div>
   </div>
 
