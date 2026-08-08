@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.4.1 (LAYOUT PATCH)</title>
+  <title>SYSTEM WINDOW V11.5 (DROPDOWN MENUS)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -34,6 +34,13 @@
     .timeline-item { padding: 5px 0 5px 10px; border-left: 2px solid var(--accent); margin-bottom: 5px; }
     .time-badge { color: var(--accent); font-weight: bold; margin-right: 10px; display: inline-block; width: 50px; }
     
+    /* DROPDOWN MENU STYLES */
+    .task-container { display: flex; align-items: center; flex-wrap: wrap; margin: 2px 0; }
+    .task-menu-btn { cursor: pointer; color: var(--text); background: none; border: none; padding: 0 8px; opacity: 0.5; font-weight: bold; }
+    .task-menu-btn:hover { opacity: 1; color: var(--accent); }
+    .task-menu-content { display: none; background: #000; border: 1px dashed var(--border); padding: 2px; border-radius: 4px; margin-left: 5px; }
+    .task-menu-content.show { display: flex; gap: 2px; }
+
     #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
     #app-container { display: none; }
     .login-box { border: 1px solid var(--accent); padding: 40px; text-align: center; box-shadow: 0 0 20px rgba(157,78,221,0.2); background: var(--card); }
@@ -77,13 +84,12 @@
       </div>
     </div>
 
-    <!-- HABITS MODULE -->
     <div class="box">
       <div class="header-row">
         <h2>HABITS (REPEATABLE)</h2>
       </div>
       <div style="margin-bottom: 10px;">
-        <input type="text" id="new-habit" placeholder="Enter new habit...">
+        <input type="text" id="new-habit" placeholder="Enter new habit..." onkeydown="if(event.key === 'Enter') addHabit()">
         <button onclick="addHabit()">+ ADD</button>
       </div>
       <div id="habit-tree"></div>
@@ -94,7 +100,7 @@
         <h2>DAILY QUESTS (RESETS 6AM)</h2>
       </div>
       <div style="margin-bottom: 10px;">
-        <input type="text" id="new-daily" placeholder="Enter new daily quest...">
+        <input type="text" id="new-daily" placeholder="Enter new daily quest..." onkeydown="if(event.key === 'Enter') addDaily()">
         <button onclick="addDaily()">+ ADD</button>
       </div>
       <div id="daily-tree"></div>
@@ -105,7 +111,7 @@
         <h2>QUEST LOG (CLEARS AT 6AM)</h2>
       </div>
       <div style="margin-bottom: 10px;">
-        <input type="text" id="new-task" placeholder="Enter one-time quest...">
+        <input type="text" id="new-task" placeholder="Enter one-time quest..." onkeydown="if(event.key === 'Enter') addTask()">
         <button onclick="addTask()">+ ADD</button>
       </div>
       <div id="todo-tree"></div>
@@ -123,7 +129,7 @@
         <h2>MONTHLY SCHEDULE (RECURRING)</h2>
       </div>
       <div style="margin-bottom: 10px;">
-        <input type="text" id="new-monthly" placeholder="Enter monthly quest...">
+        <input type="text" id="new-monthly" placeholder="Enter monthly quest..." onkeydown="if(event.key === 'Enter') addMonthly()">
         <button onclick="addMonthly()">+ ADD</button>
       </div>
       <div id="monthly-tree"></div>
@@ -444,6 +450,22 @@
       window.save();
     };
 
+    // MENU TOGGLE LOGIC
+    window.toggleTaskMenu = function(event, id) {
+      event.stopPropagation();
+      document.querySelectorAll('.task-menu-content').forEach(el => {
+        if (el.id !== 'menu-' + id) el.classList.remove('show');
+      });
+      const menu = document.getElementById('menu-' + id);
+      if(menu) menu.classList.toggle('show');
+    };
+
+    window.onclick = function(event) {
+      if (!event.target.matches('.task-menu-btn')) {
+        document.querySelectorAll('.task-menu-content').forEach(el => el.classList.remove('show'));
+      }
+    };
+
     window.renderTree = function(list, isDaily, arrayNameStr) {
       if (!list || !list.length) return '';
       const isMonthly = arrayNameStr === "'monthlies'";
@@ -451,22 +473,29 @@
       
       return '<ul>' + list.map(item => `
         <li>
-          ${isHabit ? `
-            <button class="btn-sm" style="color:var(--accent); font-weight:bold;" onclick="triggerHabit(${item.id})">[ + ]</button>
-            <span class="task-item">
-              ${item.text} ${item.time ? `(⌚ ${item.time})` : ''}
-            </span>
-          ` : `
-            <span class="task-item ${item.done ? 'completed' : ''}" onclick="toggleNode(${item.id}, ${arrayNameStr}, ${isDaily})">
-              [${item.done ? '✓' : ' '}] ${item.text} 
-              ${item.time ? `(⌚ ${item.time})` : ''} 
-              ${item.date ? `(📅 Day ${item.date})` : ''}
-            </span>
-          `}
-          <button class="btn-sm" onclick="addSubtask(${item.id}, ${arrayNameStr})">+ sub</button>
-          <button class="btn-sm" onclick="editNode(${item.id}, ${arrayNameStr})">edit</button>
-          ${isMonthly ? `<button class="btn-sm" onclick="setDateNode(${item.id}, ${arrayNameStr})">date</button>` : `<button class="btn-sm" onclick="scheduleNode(${item.id}, ${arrayNameStr})">time</button>`}
-          <button class="btn-sm btn-del" onclick="deleteNode(${item.id}, ${arrayNameStr})">x</button>
+          <div class="task-container">
+            ${isHabit ? `
+              <button class="btn-sm" style="color:var(--accent); font-weight:bold; margin-right:5px;" onclick="triggerHabit(${item.id})">[ + ]</button>
+              <span class="task-item">
+                ${item.text} ${item.time ? `(⌚ ${item.time})` : ''}
+              </span>
+            ` : `
+              <span class="task-item ${item.done ? 'completed' : ''}" onclick="toggleNode(${item.id}, ${arrayNameStr}, ${isDaily})">
+                [${item.done ? '✓' : ' '}] ${item.text} 
+                ${item.time ? `(⌚ ${item.time})` : ''} 
+                ${item.date ? `(📅 Day ${item.date})` : ''}
+              </span>
+            `}
+            
+            <button class="task-menu-btn" onclick="toggleTaskMenu(event, ${item.id})">[ ⋮ ]</button>
+            
+            <div id="menu-${item.id}" class="task-menu-content">
+              <button class="btn-sm" onclick="addSubtask(${item.id}, ${arrayNameStr})">+ sub</button>
+              <button class="btn-sm" onclick="editNode(${item.id}, ${arrayNameStr})">edit</button>
+              ${isMonthly ? `<button class="btn-sm" onclick="setDateNode(${item.id}, ${arrayNameStr})">date</button>` : `<button class="btn-sm" onclick="scheduleNode(${item.id}, ${arrayNameStr})">time</button>`}
+              <button class="btn-sm btn-del" onclick="deleteNode(${item.id}, ${arrayNameStr})">x</button>
+            </div>
+          </div>
           ${window.renderTree(item.children, isDaily, arrayNameStr)}
         </li>
       `).join('') + '</ul>';
