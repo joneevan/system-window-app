@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.5 (DROPDOWN MENUS)</title>
+  <title>SYSTEM WINDOW V11.6 (HYBRID SAVE GUARD)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -34,7 +34,6 @@
     .timeline-item { padding: 5px 0 5px 10px; border-left: 2px solid var(--accent); margin-bottom: 5px; }
     .time-badge { color: var(--accent); font-weight: bold; margin-right: 10px; display: inline-block; width: 50px; }
     
-    /* DROPDOWN MENU STYLES */
     .task-container { display: flex; align-items: center; flex-wrap: wrap; margin: 2px 0; }
     .task-menu-btn { cursor: pointer; color: var(--text); background: none; border: none; padding: 0 8px; opacity: 0.5; font-weight: bold; }
     .task-menu-btn:hover { opacity: 1; color: var(--accent); }
@@ -48,7 +47,6 @@
 </head>
 <body>
 
-  <!-- LOGIN TERMINAL -->
   <div id="login-screen">
     <div class="login-box">
       <h1>[ SYSTEM ACCESS ]</h1>
@@ -57,7 +55,6 @@
     </div>
   </div>
 
-  <!-- MAIN APP -->
   <div id="app-container">
     <h1>[ SYSTEM WINDOW ]</h1>
 
@@ -161,6 +158,7 @@
     const defaultState = {
       lvl: 1, xp: 0, str: 10, int: 10,
       lastDate: null,
+      lastUpdated: 0,
       avatarImage: null,
       habits: [],
       dailies: [
@@ -199,6 +197,7 @@
         } else {
           const localV10 = localStorage.getItem('system_state_v10');
           if (localV10) window.state = { ...defaultState, ...JSON.parse(localV10) };
+          window.state.lastUpdated = Date.now();
           await setDoc(docRef, window.state);
         }
         
@@ -236,7 +235,35 @@
       const saveBtn = document.getElementById('save-btn');
       saveBtn.innerText = "[ SAVING... ]";
       try {
-        await setDoc(doc(db, "users", currentUser.uid), window.state);
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const cloud = docSnap.data();
+          const localTLP = (window.state.lvl * 100) + window.state.xp + window.state.str + window.state.int;
+          const cloudTLP = ((cloud.lvl || 1) * 100) + (cloud.xp || 0) + (cloud.str || 10) + (cloud.int || 10);
+          const cloudTime = cloud.lastUpdated || 0;
+          const localTime = window.state.lastUpdated || 0;
+
+          if (cloudTLP > localTLP) {
+            alert("[ SYSTEM WARN ]: Cloud state has higher Hunter Level/Stats! Local save blocked. Syncing cloud data...");
+            window.state = { ...defaultState, ...cloud };
+            render();
+            saveBtn.innerText = "[ SYNCED ]";
+            setTimeout(() => saveBtn.innerText = "[ SAVE ]", 2000);
+            return;
+          } else if (cloudTime > localTime && localTLP === cloudTLP) {
+            alert("[ SYSTEM NOTICE ]: Newer cloud schedule detected. Syncing cloud data...");
+            window.state = { ...defaultState, ...cloud };
+            render();
+            saveBtn.innerText = "[ SYNCED ]";
+            setTimeout(() => saveBtn.innerText = "[ SAVE ]", 2000);
+            return;
+          }
+        }
+        
+        window.state.lastUpdated = Date.now();
+        await setDoc(docRef, window.state);
         setTimeout(() => saveBtn.innerText = "[ SAVE ]", 1000);
         render();
       } catch (e) {
@@ -326,6 +353,7 @@
       if (!val) return;
       targetArray.push({ id: Date.now(), text: val, done: false, time: "", date: "", children: [] });
       document.getElementById(inputId).value = '';
+      window.state.lastUpdated = Date.now();
       window.save();
     };
     
@@ -343,6 +371,7 @@
 
     window.triggerHabit = function(id) {
       window.addXp(15);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -360,6 +389,7 @@
         }
       };
       findAndAdd(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -376,6 +406,7 @@
         }
       };
       findAndEdit(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -392,6 +423,7 @@
         }
       };
       findAndSchedule(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -408,6 +440,7 @@
         }
       };
       findAndSetDate(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -424,6 +457,7 @@
         }
       };
       findAndDelete(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -447,10 +481,10 @@
         }
       };
       findAndToggle(targetArray);
+      window.state.lastUpdated = Date.now();
       window.save();
     };
 
-    // MENU TOGGLE LOGIC
     window.toggleTaskMenu = function(event, id) {
       event.stopPropagation();
       document.querySelectorAll('.task-menu-content').forEach(el => {
