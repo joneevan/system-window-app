@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.6 (HYBRID SAVE GUARD)</title>
+  <title>SYSTEM WINDOW V11.7 (ANTI-LAG + REWARD FLAG)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -154,6 +154,7 @@
     const provider = new GoogleAuthProvider();
 
     let currentUser = null;
+    let saveTimeout = null;
 
     const defaultState = {
       lvl: 1, xp: 0, str: 10, int: 10,
@@ -162,8 +163,8 @@
       avatarImage: null,
       habits: [],
       dailies: [
-        { id: 1, text: "Physical Training (STR +1)", done: false, type: 'str', time: "", children: [] },
-        { id: 2, text: "Mental Focus (INT +1)", done: false, type: 'int', time: "", children: [] }
+        { id: 1, text: "Physical Training (STR +1)", done: false, rewarded: false, type: 'str', time: "", children: [] },
+        { id: 2, text: "Mental Focus (INT +1)", done: false, rewarded: false, type: 'int', time: "", children: [] }
       ],
       monthlies: [],
       todos: []
@@ -179,24 +180,36 @@
       signOut(auth).then(() => {
         document.getElementById('app-container').style.display = 'none';
         document.getElementById('login-screen').style.display = 'flex';
+        localStorage.removeItem('hunter_cache');
       });
     });
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
         document.getElementById('user-email').innerText = user.email;
         
+        const cached = localStorage.getItem('hunter_cache');
+        if (cached) {
+          window.state = { ...defaultState, ...JSON.parse(cached) };
+          document.getElementById('login-screen').style.display = 'none';
+          document.getElementById('app-container').style.display = 'block';
+          render();
+        }
+
         const docRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(docRef);
         
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-container').style.display = 'block';
+
         if (docSnap.exists()) {
-          window.state = { ...defaultState, ...docSnap.data() }; 
+          const cloudData = docSnap.data();
+          if (!cached || (cloudData.lastUpdated || 0) > (window.state.lastUpdated || 0)) {
+             window.state = { ...defaultState, ...cloudData }; 
+             localStorage.setItem('hunter_cache', JSON.stringify(window.state));
+          }
         } else {
-          const localV10 = localStorage.getItem('system_state_v10');
-          if (localV10) window.state = { ...defaultState, ...JSON.parse(localV10) };
           window.state.lastUpdated = Date.now();
           await setDoc(docRef, window.state);
         }
@@ -217,6 +230,7 @@
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           window.state = { ...defaultState, ...docSnap.data() };
+          localStorage.setItem('hunter_cache', JSON.stringify(window.state));
           checkDailyReset();
           render();
           loadBtn.innerText = "[ SUCCESS ]";
@@ -233,7 +247,6 @@
     window.saveToCloud = async function() {
       if (!currentUser) return;
       const saveBtn = document.getElementById('save-btn');
-      saveBtn.innerText = "[ SAVING... ]";
       try {
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
@@ -248,6 +261,7 @@
           if (cloudTLP > localTLP) {
             alert("[ SYSTEM WARN ]: Cloud state has higher Hunter Level/Stats! Local save blocked. Syncing cloud data...");
             window.state = { ...defaultState, ...cloud };
+            localStorage.setItem('hunter_cache', JSON.stringify(window.state));
             render();
             saveBtn.innerText = "[ SYNCED ]";
             setTimeout(() => saveBtn.innerText = "[ SAVE ]", 2000);
@@ -255,6 +269,7 @@
           } else if (cloudTime > localTime && localTLP === cloudTLP) {
             alert("[ SYSTEM NOTICE ]: Newer cloud schedule detected. Syncing cloud data...");
             window.state = { ...defaultState, ...cloud };
+            localStorage.setItem('hunter_cache', JSON.stringify(window.state));
             render();
             saveBtn.innerText = "[ SYNCED ]";
             setTimeout(() => saveBtn.innerText = "[ SAVE ]", 2000);
@@ -262,10 +277,9 @@
           }
         }
         
-        window.state.lastUpdated = Date.now();
         await setDoc(docRef, window.state);
-        setTimeout(() => saveBtn.innerText = "[ SAVE ]", 1000);
-        render();
+        saveBtn.innerText = "[ SUCCESS ]";
+        setTimeout(() => saveBtn.innerText = "[ SAVE ]", 1500);
       } catch (e) {
         alert("Error saving to cloud!");
         saveBtn.innerText = "[ ERROR ]";
@@ -273,7 +287,17 @@
     };
 
     window.save = function() {
-      window.saveToCloud();
+      window.state.lastUpdated = Date.now();
+      localStorage.setItem('hunter_cache', JSON.stringify(window.state));
+      render(); 
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.innerText = "[ PENDING... ]";
+
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        window.saveToCloud();
+      }, 2000);
     };
 
     window.checkDailyReset = function() {
@@ -288,6 +312,7 @@
           const resetTree = (list) => {
             list.forEach(item => {
               item.done = false;
+              item.rewarded = false; 
               if (item.children) resetTree(item.children);
             });
           };
@@ -296,7 +321,10 @@
           const currentDay = logicalDate.getDate();
           const resetMonthlies = (list) => {
             list.forEach(item => {
-              if (item.date && parseInt(item.date) === currentDay) item.done = false;
+              if (item.date && parseInt(item.date) === currentDay) {
+                item.done = false;
+                item.rewarded = false;
+              }
               if (item.children) resetMonthlies(item.children);
             });
           };
@@ -351,9 +379,8 @@
     window.addNode = function(targetArray, inputId) {
       const val = document.getElementById(inputId).value.trim();
       if (!val) return;
-      targetArray.push({ id: Date.now(), text: val, done: false, time: "", date: "", children: [] });
+      targetArray.push({ id: Date.now(), text: val, done: false, rewarded: false, time: "", date: "", children: [] });
       document.getElementById(inputId).value = '';
-      window.state.lastUpdated = Date.now();
       window.save();
     };
     
@@ -371,7 +398,6 @@
 
     window.triggerHabit = function(id) {
       window.addXp(15);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -382,14 +408,13 @@
       const findAndAdd = (list) => {
         for (let node of list) {
           if (node.id === parentId) {
-            node.children.push({ id: Date.now(), text: text, done: false, time: "", date: "", children: [] });
+            node.children.push({ id: Date.now(), text: text, done: false, rewarded: false, time: "", date: "", children: [] });
             return true;
           }
           if (node.children && findAndAdd(node.children)) return true;
         }
       };
       findAndAdd(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -406,7 +431,6 @@
         }
       };
       findAndEdit(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -423,7 +447,6 @@
         }
       };
       findAndSchedule(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -440,7 +463,6 @@
         }
       };
       findAndSetDate(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -457,7 +479,6 @@
         }
       };
       findAndDelete(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
@@ -467,13 +488,11 @@
         for (let node of list) {
           if (node.id === id) {
             node.done = !node.done;
-            if (node.done) {
+            if (node.done && !node.rewarded) {
               window.addXp(isDaily ? 30 : 15);
               if (isDaily && node.type === 'str') window.state.str += 1;
               if (isDaily && node.type === 'int') window.state.int += 1;
-            } else {
-              if (isDaily && node.type === 'str') window.state.str -= 1;
-              if (isDaily && node.type === 'int') window.state.int -= 1;
+              node.rewarded = true; 
             }
             return true;
           }
@@ -481,7 +500,6 @@
         }
       };
       findAndToggle(targetArray);
-      window.state.lastUpdated = Date.now();
       window.save();
     };
 
