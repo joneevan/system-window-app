@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SYSTEM WINDOW V11.7 (ANTI-LAG + REWARD FLAG)</title>
+  <title>SYSTEM WINDOW V11.8 (AUDIO INTEGRATION)</title>
   <style>
     :root { --bg: #090c10; --card: #0d1117; --accent: #9d4edd; --border: #1f2937; --text: #c9d1d9; }
     body { background: var(--bg); color: var(--text); font-family: monospace; padding: 20px; max-width: 600px; margin: 0 auto; }
@@ -155,6 +155,22 @@
 
     let currentUser = null;
     let saveTimeout = null;
+
+    // AUDIO SYSTEM
+    const sfx = {
+      ding: new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3'),
+      levelup: new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3')
+    };
+
+    window.playSound = function(type) {
+      try {
+        const sound = sfx[type].cloneNode();
+        sound.volume = 0.5;
+        sound.play();
+      } catch (e) {
+        console.log("Audio play blocked or failed", e);
+      }
+    };
 
     const defaultState = {
       lvl: 1, xp: 0, str: 10, int: 10,
@@ -368,6 +384,7 @@
     window.addXp = function(amount) {
       window.state.xp += amount;
       if (window.state.xp >= 100) {
+        window.playSound('levelup');
         window.state.lvl += 1;
         window.state.xp -= 100;
         window.state.str += 2;
@@ -397,6 +414,7 @@
     };
 
     window.triggerHabit = function(id) {
+      window.playSound('ding');
       window.addXp(15);
       window.save();
     };
@@ -489,6 +507,7 @@
           if (node.id === id) {
             node.done = !node.done;
             if (node.done && !node.rewarded) {
+              window.playSound('ding');
               window.addXp(isDaily ? 30 : 15);
               if (isDaily && node.type === 'str') window.state.str += 1;
               if (isDaily && node.type === 'int') window.state.int += 1;
